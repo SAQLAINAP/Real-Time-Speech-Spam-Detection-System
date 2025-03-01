@@ -1,0 +1,5 @@
+torch>=1.10.0
+transformers>=4.18.0
+SpeechRecognition>=3.8.1
+PyAudio>=0.2.11
+numpy>=1.20.0
