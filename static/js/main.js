@@ -241,8 +241,39 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {Object} data Analysis data
      */
     function showScamAlert(data) {
+        // Get category and severity information
+        const category = data.category || 'suspicious';
+        const severity = data.severity || 5;
+        
         // Update alert content
         alertTranscript.textContent = data.transcription;
+        
+        // Select the appropriate alert class based on category and severity
+        const alertModalDialog = document.querySelector('#scamAlertModal .modal-dialog');
+        alertModalDialog.className = 'modal-dialog'; // Reset class
+        
+        // Add the appropriate class based on category
+        if (category === 'highly_suspicious') {
+            alertModalDialog.classList.add('modal-danger');
+            // Add pulse animation for high severity
+            if (severity >= 8) {
+                document.querySelector('#scamAlertModal .modal-content').style.animation = 'pulse-red 1s infinite';
+            }
+        } else if (category === 'suspicious') {
+            alertModalDialog.classList.add('modal-warning');
+        } else {
+            alertModalDialog.classList.add('modal-info');
+        }
+        
+        // Create message based on severity
+        let alertTitle = document.querySelector('#scamAlertModal .modal-title');
+        if (severity >= 8) {
+            alertTitle.textContent = '🚨 HIGH RISK SCAM DETECTED!';
+        } else if (severity >= 6) {
+            alertTitle.textContent = '⚠️ SUSPICIOUS ACTIVITY DETECTED';
+        } else {
+            alertTitle.textContent = '🔍 POTENTIAL SCAM WARNING';
+        }
         
         // Show the modal
         scamAlertModal.show();
@@ -401,19 +432,64 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display transcription
         transcriptionOutput.innerHTML = `<p>${data.transcription}</p>`;
         
-        // Display prediction
+        // Display prediction based on category and severity
         const isPotentialScam = data.is_spam;
-        const predictionClass = isPotentialScam ? 'prediction-scam' : 'prediction-safe';
+        const category = data.category || (isPotentialScam ? 'suspicious' : 'safe');
+        const severity = data.severity || 0;
+        
+        // Set appropriate CSS class based on category
+        let predictionClass = 'prediction-safe';
+        if (category === 'highly_suspicious') {
+            predictionClass = 'prediction-high-risk';
+        } else if (category === 'suspicious') {
+            predictionClass = 'prediction-scam';
+        } else if (category === 'neutral') {
+            predictionClass = 'prediction-neutral';
+        }
+        
         const confidencePercent = Math.round(data.confidence * 100);
         
+        // Create HTML for any matched hotwords if present
+        let matchesHtml = '';
+        if (data.matches && data.matches.length > 0) {
+            matchesHtml = `
+                <div class="matches-container">
+                    <h6>Detected Warning Phrases:</h6>
+                    <ul class="matches-list">
+                        ${data.matches.map(match => 
+                            `<li>${match.hotword} <span class="severity-badge">${match.severity}/10</span></li>`
+                        ).join('')}
+                    </ul>
+                </div>
+            `;
+        } else if (data.matched_patterns && data.matched_patterns.length > 0) {
+            matchesHtml = `
+                <div class="matches-container">
+                    <h6>Detected Patterns:</h6>
+                    <ul class="matches-list">
+                        ${data.matched_patterns.map(pattern => 
+                            `<li>${pattern}</li>`
+                        ).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // Add a visual severity indicator (more intense for higher severity)
+        const severityStyle = severity > 7 ? 
+            'animation: pulse-red 1.5s infinite;' : 
+            (severity > 5 ? 'animation: pulse-yellow 2s infinite;' : '');
+        
         predictionOutput.innerHTML = `
-            <div class="${predictionClass}">
+            <div class="${predictionClass}" style="${severityStyle}">
                 <span>${data.prediction}</span>
+                ${severity > 0 ? `<div class="severity-meter">Severity: ${severity}/10</div>` : ''}
             </div>
             <div class="confidence-bar">
                 <div class="confidence-fill ${isPotentialScam ? 'scam' : 'safe'}" style="width: ${confidencePercent}%"></div>
             </div>
             <div class="confidence-text">Confidence: ${confidencePercent}%</div>
+            ${matchesHtml}
         `;
     }
 

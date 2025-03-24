@@ -218,12 +218,23 @@ def analyze_audio():
             # Clean up the temporary file
             os.remove(filepath)
             
-            return jsonify({
+            # Add category and severity for UI improvements
+            response_data = {
                 "transcription": transcription,
                 "prediction": prediction_result["prediction"],
                 "is_spam": prediction_result["is_spam"],
-                "confidence": prediction_result["confidence"]
-            })
+                "confidence": prediction_result["confidence"],
+                "category": prediction_result.get("category", "safe"),
+                "severity": prediction_result.get("severity", 0)
+            }
+            
+            # Add matched patterns or hotwords if available
+            if "matches" in prediction_result:
+                response_data["matches"] = prediction_result["matches"]
+            elif "matched_patterns" in prediction_result:
+                response_data["matched_patterns"] = prediction_result["matched_patterns"]
+                
+            return jsonify(response_data)
         
         except Exception as e:
             # Clean up the temporary file in case of error
@@ -271,13 +282,24 @@ def analyze_audio_chunk():
             # Clean up the temporary file
             os.remove(filepath)
             
-            return jsonify({
+            # Add category and severity for UI improvements
+            response_data = {
                 "transcription": transcription,
                 "prediction": prediction_result["prediction"],
                 "is_spam": prediction_result["is_spam"],
                 "confidence": prediction_result["confidence"],
+                "category": prediction_result.get("category", "safe"),
+                "severity": prediction_result.get("severity", 0),
                 "empty": False
-            })
+            }
+            
+            # Add matched patterns or hotwords if available
+            if "matches" in prediction_result:
+                response_data["matches"] = prediction_result["matches"]
+            elif "matched_patterns" in prediction_result:
+                response_data["matched_patterns"] = prediction_result["matched_patterns"]
+                
+            return jsonify(response_data)
         
         except Exception as e:
             # Clean up the temporary file in case of error
