@@ -11,6 +11,8 @@ from openai import OpenAI
 # Import our utility classes
 from utils.transcriber import WhisperTranscriber
 from utils.rule_based_detector import RuleBasedScamDetector
+from utils.hotword_detector import HotwordDetector
+from utils.hotwords_data import hotwords_severity
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -30,9 +32,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# Initialize the transcriber and scam detector
+# Initialize the transcriber and scam detectors
 transcriber = WhisperTranscriber(model_size="base")  # ~140MB model
-scam_detector = RuleBasedScamDetector()
+rule_based_detector = RuleBasedScamDetector()
+hotword_detector = HotwordDetector(hotwords_severity)
 
 def allowed_file(filename):
     """Check if file extension is allowed"""
@@ -70,7 +73,7 @@ def transcribe_audio(audio_path):
 
 def predict_spam(text):
     """
-    Predict if text contains spam/scam content using OpenAI API with local fallback
+    Predict if text contains spam/scam content using OpenAI API with enhanced local fallback
     """
     # Try OpenAI API first if available
     if openai_client:
@@ -81,7 +84,7 @@ def predict_spam(text):
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a scam detection expert. Analyze the text for potential scam indicators like urgency, requests for personal information, suspicious offers, etc. Respond with a JSON object with these fields: 'is_spam' (boolean), 'confidence' (number between 0 and 1), 'prediction' (string explaining your analysis)."
+                        "content": "You are a scam detection expert. Analyze the text for potential scam indicators like urgency, requests for personal information, suspicious offers, etc. Respond with a JSON object with these fields: 'is_spam' (boolean), 'confidence' (number between 0 and 1), 'category' (one of: 'safe', 'neutral', 'suspicious', 'highly_suspicious'), 'prediction' (string explaining your analysis), 'severity' (number from 0-10 with 10 being most severe)."
                     },
                     {"role": "user", "content": text}
                 ],
@@ -90,25 +93,97 @@ def predict_spam(text):
             
             result = json.loads(response.choices[0].message.content)
             
-            # Format the prediction text for display
+            # Format the prediction text based on category
             is_spam = result.get("is_spam", False)
-            prediction_text = "🚨 Potential Scam Detected!" if is_spam else "✅ Safe"
+            category = result.get("category", "safe")
+            severity = result.get("severity", 0)
+            
+            if category == "highly_suspicious":
+                prediction_text = "🚨 HIGH RISK: Potential Scam Detected!"
+            elif category == "suspicious":
+                prediction_text = "⚠️ SUSPICIOUS: Possible Scam Detected"
+            elif category == "neutral":
+                prediction_text = "🔍 NEUTRAL: Some Unusual Elements"
+            else:
+                prediction_text = "✅ SAFE: No Scam Detected"
             
             return {
                 "is_spam": is_spam,
                 "prediction": prediction_text,
-                "confidence": result.get("confidence", 0.5)
+                "confidence": result.get("confidence", 0.5),
+                "category": category,
+                "severity": severity
             }
         except Exception as e:
             logger.error(f"Error analyzing with OpenAI API: {e}")
-            logger.info("Falling back to rule-based detection...")
+            logger.info("Falling back to local detection methods...")
     
-    # If OpenAI client is not available or API call failed, use rule-based detection
-    result = scam_detector.detect(text)
+    # First try hotword-based detection (more precise)
+    logger.info("Using hotword-based detection...")
+    hotword_result = hotword_detector.detect(text)
+    
+    # If hotword detection found potential scam or has high confidence, use it
+    if hotword_result["is_spam"] or hotword_result["confidence"] > 0.3:
+        # Format prediction text based on category
+        category = hotword_result["category"]
+        severity = hotword_result["severity"]
+        
+        if category == "highly_suspicious":
+            prediction_text = "🚨 HIGH RISK: Potential Scam Detected!"
+        elif category == "suspicious":
+            prediction_text = "⚠️ SUSPICIOUS: Possible Scam Detected"
+        elif category == "neutral":
+            prediction_text = "🔍 NEUTRAL: Some Unusual Elements"
+        else:
+            prediction_text = "✅ SAFE: No Scam Detected"
+        
+        return {
+            "is_spam": hotword_result["is_spam"],
+            "prediction": prediction_text,
+            "confidence": hotword_result["confidence"],
+            "category": category,
+            "severity": severity,
+            "matches": hotword_result["matches"],
+            "detection_method": "hotword"
+        }
+    
+    # Fall back to rule-based detection if hotword detection didn't find anything conclusive
+    logger.info("Falling back to rule-based detection...")
+    rule_result = rule_based_detector.detect(text)
+    
+    # Map rule-based results to categories
+    confidence = rule_result["confidence"]
+    if confidence > 0.7:
+        category = "highly_suspicious"
+        severity = min(10, int(confidence * 10))
+    elif confidence > 0.5:
+        category = "suspicious"
+        severity = min(7, int(confidence * 8))
+    elif confidence > 0.3:
+        category = "neutral"
+        severity = min(5, int(confidence * 6))
+    else:
+        category = "safe"
+        severity = min(3, int(confidence * 4))
+    
+    # Format prediction text
+    if category == "highly_suspicious":
+        prediction_text = "🚨 HIGH RISK: Potential Scam Detected!"
+    elif category == "suspicious":
+        prediction_text = "⚠️ SUSPICIOUS: Possible Scam Detected"
+    elif category == "neutral":
+        prediction_text = "🔍 NEUTRAL: Some Unusual Elements"
+    else:
+        prediction_text = "✅ SAFE: No Scam Detected"
+    
     return {
-        "is_spam": result["is_spam"],
-        "prediction": result["prediction"],
-        "confidence": result["confidence"]
+        "is_spam": rule_result["is_spam"],
+        "prediction": prediction_text,
+        "confidence": rule_result["confidence"],
+        "category": category,
+        "severity": severity,
+        "matched_patterns": rule_result.get("matched_patterns", []),
+        "detection_method": "rule_based"
     }
 
 @app.route('/')
