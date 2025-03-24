@@ -126,3 +126,57 @@ def analyze_audio():
             return jsonify({"error": f"Error processing audio: {str(e)}"}), 500
     
     return jsonify({"error": "Invalid file format. Allowed formats: wav, mp3, ogg, flac, webm, m4a"}), 400
+
+@app.route('/analyze-chunk', methods=['POST'])
+def analyze_audio_chunk():
+    """Process audio chunk for real-time monitoring"""
+    if 'audio' not in request.files:
+        return jsonify({"error": "No audio chunk provided"}), 400
+    
+    file = request.files['audio']
+    
+    if file.filename == '':
+        return jsonify({"error": "No audio chunk"}), 400
+    
+    if file:
+        # Create a unique filename to avoid collisions
+        unique_filename = f"{uuid.uuid4()}_chunk.webm"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(filepath)
+        
+        try:
+            # Transcribe the audio chunk
+            transcription = transcribe_audio(filepath)
+            
+            # Skip empty transcriptions
+            if not transcription or transcription == "Error transcribing audio. Please try again.":
+                os.remove(filepath)
+                return jsonify({
+                    "transcription": "",
+                    "is_spam": False,
+                    "empty": True
+                })
+            
+            # Predict if it's spam
+            prediction_result = predict_spam(transcription)
+            
+            # Clean up the temporary file
+            os.remove(filepath)
+            
+            return jsonify({
+                "transcription": transcription,
+                "prediction": prediction_result["prediction"],
+                "is_spam": prediction_result["is_spam"],
+                "confidence": prediction_result["confidence"],
+                "empty": False
+            })
+        
+        except Exception as e:
+            # Clean up the temporary file in case of error
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            
+            logging.error(f"Error processing audio chunk: {e}")
+            return jsonify({"error": f"Error processing audio chunk: {str(e)}"}), 500
+    
+    return jsonify({"error": "Invalid audio format"}), 400

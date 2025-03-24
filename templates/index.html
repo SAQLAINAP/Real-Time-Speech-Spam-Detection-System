@@ -13,10 +13,17 @@
         <div class="app-container">
             <header class="app-header">
                 <h1><span class="rocket-icon">🚀</span> Real-Time Audio Scam Detector</h1>
-                <p class="header-subtitle">Record or upload audio to detect potential scams in real-time</p>
+                <p class="header-subtitle">Protect yourself from scam calls in real-time</p>
             </header>
 
-            <div class="app-content">
+            <div class="app-modes">
+                <div class="mode-selector">
+                    <button id="singleModeBtn" class="mode-btn active">Single Analysis</button>
+                    <button id="continuousModeBtn" class="mode-btn">Call Monitoring</button>
+                </div>
+            </div>
+
+            <div id="singleModeContent" class="app-content mode-content active">
                 <div class="row">
                     <div class="col-md-4">
                         <div class="card audio-input-card">
@@ -84,15 +91,83 @@
                         <i data-feather="search"></i> Analyze Audio
                     </button>
                 </div>
+            </div>
 
-                <div id="loadingIndicator" class="loading-indicator" style="display: none;">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
+            <div id="continuousModeContent" class="app-content mode-content">
+                <div class="monitoring-panel">
+                    <div class="monitoring-header">
+                        <h3>Real-Time Call Monitoring</h3>
+                        <p>This feature will continuously listen and analyze your calls for potential scams</p>
                     </div>
-                    <span class="loading-text">Processing your audio...</span>
+                    
+                    <div class="monitoring-controls">
+                        <button id="startMonitoringBtn" class="btn btn-lg btn-success">
+                            <i data-feather="phone"></i> Start Call Monitoring
+                        </button>
+                        <button id="stopMonitoringBtn" class="btn btn-lg btn-danger" style="display: none;">
+                            <i data-feather="phone-off"></i> Stop Monitoring
+                        </button>
+                    </div>
+                    
+                    <div class="monitoring-status-panel" style="display: none;">
+                        <div class="monitoring-status">
+                            <div class="monitoring-indicator">
+                                <div class="monitoring-dot"></div>
+                                <span>Monitoring active...</span>
+                            </div>
+                            <div class="time-counter" id="monitoringTime">00:00</div>
+                        </div>
+                        
+                        <div class="live-transcript-container">
+                            <h5>Live Transcript</h5>
+                            <div id="liveTranscriptOutput" class="live-transcript">
+                                <p class="placeholder-text">Transcript will appear here when call monitoring starts...</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            </div>
 
-                <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+            <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span class="loading-text">Processing your audio...</span>
+            </div>
+
+            <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+        </div>
+    </div>
+    
+    <!-- Scam Alert Modal -->
+    <div class="modal fade" id="scamAlertModal" tabindex="-1" aria-labelledby="scamAlertModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content scam-alert-modal">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="scamAlertModalLabel">
+                        <span class="warning-icon">⚠️</span> Potential Scam Detected!
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert-content">
+                        <p class="alert-message">The system has detected potentially fraudulent language in the conversation.</p>
+                        <div class="transcript-preview" id="alertTranscript"></div>
+                        <div class="alert-tips">
+                            <h6>Safety Tips:</h6>
+                            <ul>
+                                <li>Never share personal information or financial details</li>
+                                <li>Be wary of high-pressure tactics and urgency</li>
+                                <li>Verify the caller's identity through official channels</li>
+                                <li>When in doubt, hang up and call back using an official number</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Dismiss</button>
+                    <button type="button" class="btn btn-danger" id="endCallBtn" data-bs-dismiss="modal">End Call</button>
+                </div>
             </div>
         </div>
     </div>

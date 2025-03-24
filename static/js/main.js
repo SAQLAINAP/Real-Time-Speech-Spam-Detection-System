@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Feather icons
     feather.replace();
 
-    // DOM Elements
+    // DOM Elements - Single Mode
     const recordButton = document.getElementById('recordButton');
     const stopButton = document.getElementById('stopButton');
     const audioFileInput = document.getElementById('audioFileInput');
@@ -17,20 +17,249 @@ document.addEventListener('DOMContentLoaded', function() {
     const recordingStatus = document.querySelector('.recording-status');
     const clearAudioBtn = document.getElementById('clearAudio');
 
+    // DOM Elements - Mode Switching
+    const singleModeBtn = document.getElementById('singleModeBtn');
+    const continuousModeBtn = document.getElementById('continuousModeBtn');
+    const singleModeContent = document.getElementById('singleModeContent');
+    const continuousModeContent = document.getElementById('continuousModeContent');
+
+    // DOM Elements - Continuous Mode
+    const startMonitoringBtn = document.getElementById('startMonitoringBtn');
+    const stopMonitoringBtn = document.getElementById('stopMonitoringBtn');
+    const monitoringStatusPanel = document.querySelector('.monitoring-status-panel');
+    const liveTranscriptOutput = document.getElementById('liveTranscriptOutput');
+    const monitoringTime = document.getElementById('monitoringTime');
+
+    // DOM Elements - Alert Modal
+    const scamAlertModal = new bootstrap.Modal(document.getElementById('scamAlertModal'));
+    const alertTranscript = document.getElementById('alertTranscript');
+    const endCallBtn = document.getElementById('endCallBtn');
+
     // Initialize the AudioRecorder
     const audioRecorder = new AudioRecorder();
     let currentAudioBlob = null;
     let fileSelected = false;
 
-    // Event Listeners
+    // Continuous monitoring variables
+    let isMonitoring = false;
+    let monitoringRecorder = new AudioRecorder();
+    let monitoringInterval = null;
+    let monitoringTimeCounter = 0;
+    let monitoringTimer = null;
+    let lastTranscriptions = [];
+    let currentChunk = null;
+
+    // Event Listeners - Single Mode
     recordButton.addEventListener('click', startRecording);
     stopButton.addEventListener('click', stopRecording);
     audioFileInput.addEventListener('change', handleFileUpload);
     analyzeButton.addEventListener('click', analyzeAudio);
     clearAudioBtn.addEventListener('click', clearAudio);
 
+    // Event Listeners - Mode Switching
+    singleModeBtn.addEventListener('click', switchToSingleMode);
+    continuousModeBtn.addEventListener('click', switchToContinuousMode);
+
+    // Event Listeners - Continuous Mode
+    startMonitoringBtn.addEventListener('click', startMonitoring);
+    stopMonitoringBtn.addEventListener('click', stopMonitoring);
+    endCallBtn.addEventListener('click', stopMonitoring);
+
     /**
-     * Start audio recording
+     * Switch to Single Analysis Mode
+     */
+    function switchToSingleMode() {
+        // Only switch if not already in this mode
+        if (singleModeBtn.classList.contains('active')) return;
+        
+        // Stop monitoring if active
+        if (isMonitoring) {
+            stopMonitoring();
+        }
+        
+        // Update UI
+        singleModeBtn.classList.add('active');
+        continuousModeBtn.classList.remove('active');
+        singleModeContent.classList.add('active');
+        continuousModeContent.classList.remove('active');
+    }
+
+    /**
+     * Switch to Continuous Monitoring Mode
+     */
+    function switchToContinuousMode() {
+        // Only switch if not already in this mode
+        if (continuousModeBtn.classList.contains('active')) return;
+        
+        // Update UI
+        continuousModeBtn.classList.add('active');
+        singleModeBtn.classList.remove('active');
+        continuousModeContent.classList.add('active');
+        singleModeContent.classList.remove('active');
+    }
+
+    /**
+     * Start continuous monitoring
+     */
+    async function startMonitoring() {
+        try {
+            // Clear UI
+            liveTranscriptOutput.innerHTML = '<p class="placeholder-text">Listening...</p>';
+            errorMessage.style.display = 'none';
+            
+            // Start recording
+            await monitoringRecorder.startRecording();
+            
+            // Update UI
+            isMonitoring = true;
+            startMonitoringBtn.style.display = 'none';
+            stopMonitoringBtn.style.display = 'block';
+            monitoringStatusPanel.style.display = 'block';
+            
+            // Initialize monitoring time
+            monitoringTimeCounter = 0;
+            updateMonitoringTime();
+            monitoringTimer = setInterval(updateMonitoringTime, 1000);
+            
+            // Start the monitoring cycle
+            monitoringInterval = setInterval(captureAndAnalyzeChunk, 5000);
+            
+        } catch (error) {
+            showError('Microphone access denied. Please allow microphone access and try again.');
+            console.error('Monitoring error:', error);
+        }
+    }
+
+    /**
+     * Stop continuous monitoring
+     */
+    function stopMonitoring() {
+        if (!isMonitoring) return;
+        
+        // Clear intervals
+        clearInterval(monitoringInterval);
+        clearInterval(monitoringTimer);
+        
+        // Stop recording
+        monitoringRecorder.cancelRecording();
+        
+        // Update UI
+        isMonitoring = false;
+        startMonitoringBtn.style.display = 'block';
+        stopMonitoringBtn.style.display = 'none';
+        monitoringStatusPanel.style.display = 'none';
+        
+        // Reset variables
+        lastTranscriptions = [];
+        monitoringTimeCounter = 0;
+    }
+
+    /**
+     * Capture audio chunk and analyze it
+     */
+    async function captureAndAnalyzeChunk() {
+        try {
+            // Pause current recording
+            const currentRecording = await monitoringRecorder.stopRecording();
+            
+            // If we have a valid recording
+            if (currentRecording && currentRecording.size > 0) {
+                // Send to server for analysis
+                analyzeAudioChunk(currentRecording);
+            }
+            
+            // Restart recording for next chunk
+            await monitoringRecorder.startRecording();
+            
+        } catch (error) {
+            console.error('Error capturing audio chunk:', error);
+            // Continue monitoring even if one chunk fails
+        }
+    }
+
+    /**
+     * Analyze audio chunk for monitoring
+     * @param {Blob} audioBlob The audio blob to analyze
+     */
+    function analyzeAudioChunk(audioBlob) {
+        // Create form data for the API request
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'chunk.webm');
+        
+        // Send the API request
+        fetch('/analyze-chunk', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Server error: ' + response.statusText);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // If the chunk has content
+            if (!data.empty) {
+                // Add to transcription history
+                updateLiveTranscript(data.transcription);
+                
+                // Check if it's a scam
+                if (data.is_spam) {
+                    showScamAlert(data);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error analyzing audio chunk:', error);
+        });
+    }
+
+    /**
+     * Update the live transcript with new text
+     * @param {string} text New transcription text
+     */
+    function updateLiveTranscript(text) {
+        // Add to transcript history (keep last 5)
+        lastTranscriptions.push(text);
+        if (lastTranscriptions.length > 5) {
+            lastTranscriptions.shift();
+        }
+        
+        // Update the display
+        liveTranscriptOutput.innerHTML = lastTranscriptions.map(t => `<p>${t}</p>`).join('');
+        
+        // Scroll to bottom
+        liveTranscriptOutput.scrollTop = liveTranscriptOutput.scrollHeight;
+    }
+
+    /**
+     * Show scam alert modal
+     * @param {Object} data Analysis data
+     */
+    function showScamAlert(data) {
+        // Update alert content
+        alertTranscript.textContent = data.transcription;
+        
+        // Show the modal
+        scamAlertModal.show();
+    }
+
+    /**
+     * Update monitoring time display
+     */
+    function updateMonitoringTime() {
+        monitoringTimeCounter++;
+        const minutes = Math.floor(monitoringTimeCounter / 60).toString().padStart(2, '0');
+        const seconds = (monitoringTimeCounter % 60).toString().padStart(2, '0');
+        monitoringTime.textContent = `${minutes}:${seconds}`;
+    }
+
+    /**
+     * Start audio recording (single mode)
      */
     async function startRecording() {
         try {
@@ -46,7 +275,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Stop audio recording and update UI
+     * Stop audio recording and update UI (single mode)
      */
     async function stopRecording() {
         try {
@@ -71,7 +300,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Handle file upload
+     * Handle file upload (single mode)
      * @param {Event} event The change event
      */
     function handleFileUpload(event) {
@@ -99,7 +328,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Display audio preview
+     * Display audio preview (single mode)
      * @param {Blob} audioBlob The audio blob
      * @param {string} source The source name
      */
@@ -114,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Analyze the audio using the server API
+     * Analyze the audio using the server API (single mode)
      */
     function analyzeAudio() {
         if (!currentAudioBlob) {
@@ -165,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Display analysis results
+     * Display analysis results (single mode)
      * @param {Object} data The result data
      */
     function displayResults(data) {
@@ -189,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Clear UI state
+     * Clear UI state (single mode)
      */
     function clearUI() {
         clearOutputs();
@@ -206,7 +435,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Clear output displays
+     * Clear output displays (single mode)
      */
     function clearOutputs() {
         transcriptionOutput.innerHTML = '<div class="placeholder-text">Transcription will appear here...</div>';
@@ -226,7 +455,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Clear audio and reset the UI
+     * Clear audio and reset the UI (single mode)
      */
     function clearAudio() {
         clearUI();
@@ -239,6 +468,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             showError('Your browser does not support audio recording. Please try a modern browser like Chrome, Firefox, or Edge.');
             recordButton.disabled = true;
+            startMonitoringBtn.disabled = true;
         }
     }
 
