@@ -1,110 +1,40 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
-.Python
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# PyInstaller
+*.egg-info/
 dist/
 build/
-*.manifest
-*.spec
-
-# Installer logs
-debian/
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# poetry
-poetry.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-
-# SageMath parsed files
-*.sage.py
 
 # Environments
 .env
 .env.*
+!.env.example
+venv/
+env/
+.venv/
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# Whisper cached models (large files)
+whisper/
+*.pt
 
-# Rope project settings
-.ropeproject
+# Temp / uploads
+tmp/
+*.tmp
 
-# mkdocs documentation
-/site
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
 
-# mypy
-.mypy_cache/
-.dmypy.json
+# Replit (no longer used)
+.replit
+replit.nix
+uv.lock
 
-# Pyre type checker
-.pyre/
+# Claude Code
+.claude/
 
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/ !.env.example
+# Logs
+*.log
