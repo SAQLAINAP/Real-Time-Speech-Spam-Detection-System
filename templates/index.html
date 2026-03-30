@@ -42,6 +42,18 @@
                                     </label>
                                     <input type="file" id="audioFileInput" accept="audio/*" class="d-none">
                                 </div>
+
+                                <div class="or-divider demo-divider">TRY A DEMO</div>
+                                <div class="demo-samples">
+                                    <p class="demo-label">Click a sample to analyze:</p>
+                                    <div class="demo-btns">
+                                        <button class="btn demo-btn" data-sample="irs">🏛️ IRS Scam</button>
+                                        <button class="btn demo-btn" data-sample="bank">🏦 Bank Fraud</button>
+                                        <button class="btn demo-btn" data-sample="lottery">🎰 Lottery</button>
+                                        <button class="btn demo-btn" data-sample="safe">✅ Safe Call</button>
+                                    </div>
+                                </div>
+
                                 <div class="recording-status" style="display: none;">
                                     <div class="recording-indicator">
                                         <div class="recording-dot"></div>
@@ -136,6 +148,15 @@
             </div>
 
             <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+
+            <!-- Session History Log -->
+            <div id="historyPanel" class="history-panel" style="display: none;">
+                <div class="history-header">
+                    <h5>Analysis History</h5>
+                    <button id="clearHistoryBtn" class="btn btn-sm btn-outline-secondary">Clear</button>
+                </div>
+                <div id="historyList" class="history-list"></div>
+            </div>
         </div>
     </div>
     

@@ -1,38 +1,33 @@
 import logging
 import threading
 import time
-from app import app, transcriber
+from app import app, transcriber, monitoring_transcriber
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def preload_whisper_model():
+
+def preload_whisper_models():
     """
-    Preload the Whisper model in a background thread to avoid blocking the app startup.
+    Preload both Whisper models (base + tiny) in background threads so they're
+    ready before the first request arrives.
     """
-    logger.info("Starting background thread to preload Whisper model...")
-    def _load_model():
+    def _load(t, label):
         try:
-            start_time = time.time()
-            logger.info("Preloading Whisper model...")
-            result = transcriber.load_model()
-            end_time = time.time()
-            if result:
-                logger.info(f"Whisper model preloaded successfully in {end_time - start_time:.2f} seconds")
+            start = time.time()
+            logger.info(f"Preloading Whisper {label} model...")
+            if t.load_model():
+                logger.info(f"Whisper {label} loaded in {time.time() - start:.1f}s")
             else:
-                logger.error("Failed to preload Whisper model")
+                logger.error(f"Failed to load Whisper {label} model")
         except Exception as e:
-            logger.error(f"Error preloading Whisper model: {e}")
-    
-    # Start the model loading in a background thread
-    thread = threading.Thread(target=_load_model)
-    thread.daemon = True
-    thread.start()
+            logger.error(f"Error loading Whisper {label}: {e}")
+
+    for model, label in [(transcriber, "base"), (monitoring_transcriber, "tiny")]:
+        t = threading.Thread(target=_load, args=(model, label), daemon=True)
+        t.start()
+
 
 if __name__ == "__main__":
-    # Preload the Whisper model in the background
-    preload_whisper_model()
-    
-    # Start the Flask application
+    preload_whisper_models()
     app.run(host="0.0.0.0", port=5000, debug=True)
