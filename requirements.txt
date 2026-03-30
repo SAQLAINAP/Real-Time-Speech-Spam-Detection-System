@@ -1,0 +1,18 @@
+# Core
+flask>=3.1.0
+werkzeug>=3.1.3
+gunicorn>=23.0.0
+
+# Transcription
+openai-whisper>=20240930
+torch>=2.6.0
+
+# AI / Detection
+openai>=1.68.2
+requests>=2.31.0
+
+# Optional — Plivo phone integration (pip install plivo)
+# plivo>=4.39.0
+
+# Optional — DistilBERT local ML detector (pip install transformers)
+# transformers>=4.40.0

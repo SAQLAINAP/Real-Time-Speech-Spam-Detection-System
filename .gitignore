@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.env.*
+!.env.example
+venv/
+env/
+.venv/
+
+# Whisper cached models (large files)
+whisper/
+*.pt
+
+# Temp / uploads
+tmp/
+*.tmp
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Replit (no longer used)
+.replit
+replit.nix
+uv.lock
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
