@@ -434,9 +434,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── Display Results (1B + 1C integrated) ─────────────────────────────────
     function displayResults(data) {
-        // 1B — Highlighted transcription
+        // 1B + 3C — Highlighted transcription with language badge
         const highlighted = highlightTranscript(data.transcription, data.matches, data.matched_patterns);
-        transcriptionOutput.innerHTML = `<p>${highlighted}</p>`;
+        const langBadge = (data.language && data.language !== 'en')
+            ? `<span class="lang-badge">${data.language_name || data.language.toUpperCase()}</span>`
+            : '';
+        transcriptionOutput.innerHTML = `${langBadge}<p>${highlighted}</p>`;
 
         const isPotentialScam = data.is_spam;
         const category = data.category || (isPotentialScam ? 'suspicious' : 'safe');

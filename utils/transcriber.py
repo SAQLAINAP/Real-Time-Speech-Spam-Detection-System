@@ -45,27 +45,32 @@ class WhisperTranscriber:
             return False
     
     def transcribe(self, audio_path: str) -> Optional[str]:
+        """Transcribe audio. Returns text only (backwards-compatible)."""
+        result = self.transcribe_with_language(audio_path)
+        return result["text"] if result else None
+
+    def transcribe_with_language(self, audio_path: str) -> Optional[Dict[str, Any]]:
         """
-        Transcribe audio file using the loaded Whisper model.
-        
-        Args:
-            audio_path (str): Path to the audio file to transcribe.
-            
+        Transcribe audio and return both text and detected language.
+
         Returns:
-            Optional[str]: The transcribed text, or None if transcription failed.
+            dict with keys: text (str), language (str ISO code), or None on failure.
         """
         if not os.path.exists(audio_path):
             logger.error(f"Audio file does not exist: {audio_path}")
             return None
-        
+
         try:
             if not self.load_model():
                 return None
-            
+
             logger.info(f"Transcribing audio file: {audio_path}")
             result = self.model.transcribe(audio_path)
-            return result["text"]
-        
+            return {
+                "text":     result["text"],
+                "language": result.get("language", "en"),
+            }
+
         except Exception as e:
             logger.error(f"Error transcribing audio: {e}")
             return None

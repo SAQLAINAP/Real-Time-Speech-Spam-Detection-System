@@ -13,6 +13,7 @@ from utils.rule_based_detector import RuleBasedScamDetector
 from utils.hotword_detector import HotwordDetector
 from utils.hotwords_data import hotwords_severity
 from utils.embedding_detector import EmbeddingScamDetector
+from utils.multilang_hotwords import LANGUAGE_HOTWORDS, LANGUAGE_NAMES
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -105,26 +106,30 @@ def deepgram_transcribe(audio_path: str):
     return None
 
 
-def transcribe_audio(audio_path: str, fast: bool = False) -> str:
+def transcribe_audio(audio_path: str, fast: bool = False) -> dict:
     """
     Transcribe audio with a priority chain:
       1. Deepgram (if DEEPGRAM_API_KEY set) — fastest
-      2. Local Whisper tiny (if fast=True) or base — reliable offline
+      2. Local Whisper tiny (if fast=True) or base — reliable offline, returns language
       3. OpenAI Whisper API — fallback
+
+    Returns dict: {"text": str, "language": str}
     """
-    # 1. Deepgram (fast mode preferred)
+    error_result = {"text": "Error transcribing audio. Please try again.", "language": "en"}
+
+    # 1. Deepgram
     if fast or DEEPGRAM_API_KEY:
         result = deepgram_transcribe(audio_path)
         if result:
-            return result
+            return {"text": result, "language": "en"}  # Deepgram doesn't return lang here
 
-    # 2. Local Whisper
+    # 2. Local Whisper (returns language)
     local = monitoring_transcriber if fast else transcriber
     try:
         logger.info(f"Local Whisper ({'tiny' if fast else 'base'}) transcription...")
-        result = local.transcribe(audio_path)
+        result = local.transcribe_with_language(audio_path)
         if result:
-            logger.info("Local transcription successful")
+            logger.info(f"Local transcription successful — language: {result['language']}")
             return result
     except Exception as e:
         logger.error(f"Local Whisper error: {e}")
@@ -134,16 +139,18 @@ def transcribe_audio(audio_path: str, fast: bool = False) -> str:
         try:
             logger.info("Falling back to OpenAI Whisper API...")
             with open(audio_path, "rb") as f:
-                resp = openai_client.audio.transcriptions.create(model="whisper-1", file=f)
-            return resp.text
+                resp = openai_client.audio.transcriptions.create(
+                    model="whisper-1", file=f, response_format="verbose_json"
+                )
+            return {"text": resp.text, "language": getattr(resp, "language", "en")}
         except Exception as e:
             logger.error(f"OpenAI Whisper API error: {e}")
 
-    return "Error transcribing audio. Please try again."
+    return error_result
 
 
 # ── 2C: Improved contextual spam detection ────────────────────────────────────
-def predict_spam(text: str, context: str = None) -> dict:
+def predict_spam(text: str, context: str = None, language: str = "en") -> dict:
     """
     Detect spam/scam with a cascading pipeline:
       1. OpenAI GPT-4o (context-aware, low false positives)
@@ -198,9 +205,11 @@ def predict_spam(text: str, context: str = None) -> dict:
     if emb_result is not None:
         return emb_result
 
-    # 3. Hotword detection (negation-aware)
-    logger.info("Using hotword-based detection...")
-    hotword_result = hotword_detector.detect(text)
+    # 3. Hotword detection — use language-specific word list if available
+    lang_hotwords = LANGUAGE_HOTWORDS.get(language, {})
+    active_detector = HotwordDetector({**hotwords_severity, **lang_hotwords}) if lang_hotwords else hotword_detector
+    logger.info(f"Using hotword-based detection (lang={language}, {len(lang_hotwords)} extra words)...")
+    hotword_result = active_detector.detect(text)
 
     if hotword_result["is_spam"] or hotword_result["confidence"] > 0.3:
         category = hotword_result["category"]
@@ -260,6 +269,11 @@ if os.environ.get("PLIVO_AUTH_ID"):
 else:
     logger.info("Plivo integration disabled (set PLIVO_AUTH_ID to enable)")
 
+# REST API (3B) — always enabled; set API_KEYS env var to require auth
+from utils.api_handler import api_bp
+app.register_blueprint(api_bp)
+logger.info("REST API enabled — /api/v1/docs for Swagger UI")
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route('/')
@@ -285,12 +299,15 @@ def analyze_audio():
     file.save(filepath)
 
     try:
-        transcription = transcribe_audio(filepath, fast=False)
-        prediction_result = predict_spam(transcription)
+        t = transcribe_audio(filepath, fast=False)
+        transcription, language = t["text"], t["language"]
+        prediction_result = predict_spam(transcription, language=language)
         os.remove(filepath)
 
         response_data = {
             "transcription": transcription,
+            "language":      language,
+            "language_name": LANGUAGE_NAMES.get(language, language.upper()),
             "prediction":    prediction_result["prediction"],
             "is_spam":       prediction_result["is_spam"],
             "confidence":    prediction_result["confidence"],
@@ -334,18 +351,21 @@ def analyze_audio_chunk():
 
     try:
         # 2A: use fast=True → Deepgram or tiny Whisper
-        transcription = transcribe_audio(filepath, fast=True)
+        t = transcribe_audio(filepath, fast=True)
+        transcription, language = t["text"], t["language"]
 
         if not transcription or transcription == "Error transcribing audio. Please try again.":
             os.remove(filepath)
             return jsonify({"transcription": "", "is_spam": False, "empty": True})
 
-        # 2C: pass accumulated context for smarter detection
-        prediction_result = predict_spam(transcription, context=context)
+        # 2C + 3C: pass accumulated context + detected language for smarter detection
+        prediction_result = predict_spam(transcription, context=context, language=language)
         os.remove(filepath)
 
         response_data = {
             "transcription": transcription,
+            "language":      language,
+            "language_name": LANGUAGE_NAMES.get(language, language.upper()),
             "prediction":    prediction_result["prediction"],
             "is_spam":       prediction_result["is_spam"],
             "confidence":    prediction_result["confidence"],
