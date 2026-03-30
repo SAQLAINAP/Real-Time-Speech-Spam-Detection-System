@@ -32,6 +32,10 @@ tmp/
 .replit
 replit.nix
 uv.lock
+pyproject.toml
+attached_assets/
+generated-icon.png
+check_modules.py
 
 # Claude Code
 .claude/
